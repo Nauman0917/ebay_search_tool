@@ -1304,187 +1304,97 @@ if ($action == 'get_ebay_details') {
 }
 ?>
 
-<?php
-set_time_limit(0);
-error_reporting(E_ALL);
-ini_set("memory_limit", "-1");
 
-include('includes/functions.php');
-include('includes/ebayKeys.php');
-include('includes/ebayApi.class.php');
 
-try {
-    if (!isset($_POST['action'])) {
-        throw new Exception('Action is not set.');
-    }
 
-    $action = trim($_POST['action']);
 
-    if ($action !== 'get_ebay_details') {
-        throw new Exception('Invalid action.');
-    }
 
-    // Input Validation
-    $required_fields = ['cat_id', 'categoryName', 'currentOffset', 'excludedSellers', 'excludeWordsFromTitle', 'spec_seller', 'condition', 'country', 'start_price', 'end_price', 'exclude_words'];
-    foreach ($required_fields as $field) {
-        if (!isset($_POST[$field])) {
-            throw new Exception("Missing required field: $field");
-        }
-    }
 
-    $cat_id = trim($_POST['cat_id']);
-    $cat_name = trim($_POST['categoryName']);
-    $current_offset = intval(trim($_POST['currentOffset']));
 
-    $excludedSellers = trim($_POST['excludedSellers']);
-    $exclude_words_from_title = trim($_POST['excludeWordsFromTitle']);
-    $spec_seller = trim($_POST['spec_seller']);
-    $condition = trim($_POST['condition']);
-    $country = trim($_POST['country']);
-    $start_price = trim($_POST['start_price']);
-    $end_price = trim($_POST['end_price']);
-    $exclude_words = trim($_POST['exclude_words']);
 
-    $output_file_name = 'output_string_temp.html';
 
-    // Delete the output file if it exists
-    if (file_exists($output_file_name)) {
-        unlink($output_file_name);
-    }
 
-    // Get the eBay API token
-    $call_refresh_token = get_application_token($application_id, $certificate_id);
-    $xml_auth = json_decode($call_refresh_token, true);
 
-    if (isset($xml_auth['error'])) {
-        throw new Exception($xml_auth['error_description']);
-    }
 
-    $access_token = trim($xml_auth['access_token']);
 
-    // Save excluded sellers
-    file_put_contents('exclude_sellers.txt', $excludedSellers);
-    $excludedSellers = str_replace([",", " "], ["|", ""], $excludedSellers);
 
-    // Save excluded words from title
-    file_put_contents('exclude_words_from_title.txt', $exclude_words_from_title);
-    $exclude_words_from_title = !empty($exclude_words_from_title) ? explode(",", $exclude_words_from_title) : [];
 
-    // Save condition
-    file_put_contents('condition_tag.txt', $condition);
-    $condition_name = ($condition == 1000) ? 'NEW' : (($condition == 3000) ? 'USED' : '');
 
-    // Save excluded words
-    file_put_contents('exclude_words.txt', $exclude_words);
-    $exclude_words = explode(",", $exclude_words);
 
-    // Setup filters
-    $filter = "filter=maxDeliveryCost:0";
-    $filter .= ",buyingOptions:{FIXED_PRICE}";
-    $filter .= ',conditionIds:{' . $condition . '}';
-    $filter .= ",itemLocationCountry:$country";
-    $filter .= ",price:[$start_price..$end_price],priceCurrency:USD";
 
-    if ($excludedSellers !== '') {
-        $filter .= ',excludeSellers:{' . $excludedSellers . '}';
-    }
 
-    if ($spec_seller !== '') {
-        $filter .= ',sellers:{' . $spec_seller . '}';
-    }
 
-    $limit = 200;
-    $offset = max(0, $current_offset);
-    if ($offset % $limit !== 0) {
-        $offset = floor($offset / $limit) * $limit;
-    }
-    $offset_limit = $offset + 10000;
 
-    $all_item_summaries = [];
+
+
+
+
+
+
+
+
+
+
+
+
+$limit = 200; // Number of records per API call
+$batch_limit = 10000; // Maximum number of records to fetch per "next" URL
+$offset = 0;
+$all_item_summaries = [];
+
+do {
     $response = browseApi_searchItmByCatId($cat_id, $limit, $offset, $filter, $access_token);
-    $data = json_decode($response, true);
+    $data = json_decode($response);
+    $total_listings = $data->total;
 
-    if (!isset($data['total'])) {
-        throw new Exception('Failed to retrieve total listings.');
+    if (isset($data->itemSummaries)) {
+        $all_item_summaries = array_merge($all_item_summaries, $data->itemSummaries);
     }
 
-    $total_listings = $data['total'];
-    $total_listings_remaining = $total_listings - $offset;
-
-    $filename = $cat_id . '.csv';
-    if (file_exists($filename)) {
-        unlink($filename);
-    }
-
-    // Read the product description from the file
-    $product_description = file_get_contents("product_description.txt");
-
-    // Open CSV file
-    $fp = fopen($filename, 'w');
-    fputcsv($fp, ["Item Type", "Product Name", "Product Type", "Product Code/SKU", "Bin Picking Number", "Brand Name", "Option Set", "Option Set Align", "Product Description", "Price", "Cost Price", "Retail Price", "Sale Price", "Fixed Shipping Cost", "Free Shipping", "Product Warranty", "Product Weight", "Product Width", "Product Height", "Product Depth", "Allow Purchases?", "Product Visible?", "Product Availability", "Track Inventory", "Current Stock Level", "Low Stock Level", "Category", "Product Image File - 1", "Product Image Is Thumbnail - 1", "Product Image File - 2", "Product Image Is Thumbnail - 2", "Product Image File - 3", "Product Image Is Thumbnail - 3", "Search Keywords", "Page Title", "META Keywords", "META Description", "Product Condition", "Show Product Condition?", "Sort Order", "Product Tax Class", "Product UPC/EAN", "Stop Processing Rules", "Product URL", "Redirect Old URL?", "GPS Global Trade Item Number", "GPS Manufacturer Part Number", "GPS Gender", "GPS Age Group", "GPS Color", "GPS Size", "GPS Material", "GPS Pattern", "GPS Item Group ID", "GPS Category", "GPS Enabled", "Tax Provider Tax Code", "Product Custom Fields", "Product Id on Ebay"]);
-
-    // Write HTML output header
-    $output_string_header = '<table>
-            <tr>
-                <td colspan="5"> Total Listings : ' . $total_listings . '  </td>
-            </tr>
-            <tr>
-                <td>Count</td>
-                <td>Title</td>
-                <td>Price</td>
-                <td>Seller</td>
-                <td>Image</td>
-            </tr>';
-    file_put_contents($output_file_name, $output_string_header);
-
-    $count = 0;
-    $next_url = $data['next'] ?? null;
-
-    do {
-        $response_data = $next_url ? json_decode(browseApi_searchItmByCatId_next($next_url, $access_token), true) : $data;
-        $all_item_summaries = array_merge($all_item_summaries, $response_data['itemSummaries'] ?? []);
-
-        $next_url = $response_data['next'] ?? null;
-
+    // Write the data to CSV and HTML after every batch of 200 records
+    if (!empty($all_item_summaries)) {
         $output_fp = fopen($output_file_name, 'a');
         $output_string = '';
 
-        foreach ($response_data['itemSummaries'] as $result) {
+        foreach ($all_item_summaries as $result) {
             $count++;
 
-            $title = $result['title'];
+            $itemId = $result->legacyItemId;
+            $itemId_onEbay = $result->itemId ?? "";
+            $title = $result->title;
+
             foreach ($exclude_words_from_title as $word) {
                 $title = trim(str_ireplace(trim($word), '', $title));
             }
 
             $category_name = $cat_name;
-            foreach ($result['categories'] as $category) {
-                if ($category['categoryId'] == $cat_id) {
-                    $category_name = $category['categoryName'];
+            if ($result->categories) {
+                foreach ($result->categories as $category) {
+                    if ($category->categoryId == $cat_id) {
+                        $category_name = $category->categoryName;
+                    }
                 }
             }
 
-            $thumb_image_1 = $result['image']['imageUrl'] ?? '';
-            $large_image = $result['thumbnailImages'][0]['imageUrl'] ?? '';
+            $thumb_image_1 = $result->image->imageUrl;
+            $large_image = $result->thumbnailImages[0]->imageUrl ?? '';
 
-            $price = $result['price']['value'];
-            $condition_name = $result['condition'];
+            $price = $result->price->value;
+            $condition = $result->condition;
+            $shippingCost = $result->shippingOptions[0]->shippingCost->value ?? 0;
+            $itemWebUrl = explode("&", $result->itemWebUrl)[0];
 
-            $shipping_cost = $result['shippingOptions'][0]['shippingCost']['value'] ?? 0;
-            $itemWebUrl = explode("&", $result['itemWebUrl'])[0];
+            $img_2 = $result->additionalImages[0]->imageUrl ?? '';
+            $img_3 = $result->additionalImages[1]->imageUrl ?? '';
+            $img_4 = $result->additionalImages[2]->imageUrl ?? '';
+            $img_5 = $result->additionalImages[3]->imageUrl ?? '';
+            $img_6 = $result->additionalImages[4]->imageUrl ?? '';
 
-            $img_2 = $result['additionalImages'][0]['imageUrl'] ?? '';
-            $img_3 = $result['additionalImages'][1]['imageUrl'] ?? '';
-            $img_4 = $result['additionalImages'][2]['imageUrl'] ?? '';
-            $img_5 = $result['additionalImages'][3]['imageUrl'] ?? '';
-            $img_6 = $result['additionalImages'][4]['imageUrl'] ?? '';
+            $seller = $result->seller->username;
 
-            $seller = $result['seller']['username'];
-
-            // Filter the exclude words from the title
             foreach ($exclude_words as $c) {
                 if (strpos($title, $c) !== FALSE) {
-                    continue 2;
+                    continue 2; // Skip this item if it contains any excluded words
                 }
             }
 
@@ -1493,37 +1403,112 @@ try {
                 <td>' . $title . '</td>
                 <td>' . $price . '</td>
                 <td>' . $seller . '</td>
-                <td><img src="' . $large_image . '" width=60 /></td>
+                <td><img src="' . $large_image . '" width="60" /></td>
             </tr>' . "\n";
 
-            fputcsv($fp, ["Product", $title, "P", " ", " ", " ", " ", "Right", $product_description, "0", $price, "0", "0", "0", "Y", "6 Month Replacement Warranty", "7", "0", "0", "0", "Y", "Y", "Usually Ships in 1 to 2 Business Days", "By Product", "0", $category_name, $thumb_image_1, "Y", $img_2, "N", $img_3, "N", " ", $title, " ", " ", $condition_name, "N", "100", "Taxable", " ", "N", $itemWebUrl, "N", " ", " ", "Unisex", "Adult", " ", " ", " ", $category_name, " ", " ", " ", " ", " ", " "]);
+            fputcsv($fp, array("Product", $title, "P", " ", " ", " ", " ", "Right", $product_description, "0", $price, "0", "0", "0", "Y", "6 Month Replacement Warranty", "7", "0", "0", "0", "Y", "Y", "Usually Ships in 1-2 Business Days", "none", "0", "0", $category_name, $large_image, " ", $img_2, "Y", $img_3, " ", " ", " ", "unique_string", $itemId_onEbay, $condition_name, "Y", "0", "Default Tax Class", " ", "N", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", "N", " ", " ", $itemId_onEbay));
         }
 
         fwrite($output_fp, $output_string);
         fclose($output_fp);
+    }
 
-        $offset += $limit;
+    $offset += $limit;
 
-    } while ($next_url && $offset < $offset_limit);
+    // If the current batch has reached the 10,000 records limit, reset and start a new batch
+    if ($offset % $batch_limit === 0) {
+        $offset = 0; // Reset offset for the new batch
+        $current_offset += $batch_limit; // Increase the current offset to fetch the next 10,000 records
+    }
 
-    // Append closing HTML tags to output file
-    $output_string_footer = '</table>';
-    file_put_contents($output_file_name, $output_string_footer, FILE_APPEND);
+    // Prepare for the next API call
+    $next_url = $data->next ?? null;
 
-    fclose($fp);
+    // If there's no next URL or we've fetched all items, break out of the loop
+    if (!$next_url || $offset > $total_listings) {
+        break;
+    }
 
-    // Print final output
-    echo json_encode([
-        'status' => 'success',
-        'message' => 'Data retrieved and saved successfully.',
-        'output_file' => $output_file_name,
-        'csv_file' => $filename
-    ]);
+} while ($offset <= $total_listings);
 
-} catch (Exception $e) {
-    echo json_encode([
-        'status' => 'error',
-        'message' => $e->getMessage()
-    ]);
+fclose($fp);
+
+// Write the footer to the HTML output file
+$output_string_footer = '</table>';
+file_put_contents($output_file_name, $output_string_footer, FILE_APPEND);
+
+echo json_encode(["success" => true, "offset" => $offset]);
+return;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function write_data_in_files($next_data) {
+    $output_file_name = 'output_string_temp.html';
+    $filename = 'output.csv';
+
+    // Open HTML file in append mode
+    $output_fp_html = fopen($output_file_name, 'a');
+
+    // Open CSV file in append mode
+    $fp_csv = fopen($filename, 'a');
+
+    // Initialize HTML string
+    $output_string = '';
+
+    foreach ($next_data->itemSummaries as $result) {
+        $title = $result->title;
+        $price = $result->price->value;
+        $seller = $result->seller->username;
+
+        // Handling images
+        $large_image = isset($result->thumbnailImages[0]->imageUrl) ? $result->thumbnailImages[0]->imageUrl : '';
+
+        $category_name = 'Default Category';
+        if ($result->categories) {
+            foreach ($result->categories as $category) {
+                $category_name = $category->categoryName;
+            }
+        }
+
+        // Building the HTML row
+        $output_string .= '<tr>
+            <td>' . $title . '</td>
+            <td>' . $price . '</td>
+            <td>' . $seller . '</td>
+            <td>';
+        $output_string .= '<img src="' . $large_image . '" width="60" />&nbsp;';
+        $output_string .= '</td>
+        </tr>' . "\n";
+
+        // Writing to CSV
+        fputcsv($fp_csv, [
+            "Product", $title, "P", " ", " ", " ", " ", "Right", "Product description here", "0", $price, "0", "0", "0", "Y", 
+            "6 Month Replacement Warranty", "7", "0", "0", "0", "Y", "Y", "Usually Ships in 1-2 Business Days", "none", "0", "0", 
+            $category_name, $large_image, " ", " ", "Y", " ", " ", " ", "unique_string", $result->itemId ?? "", 
+            $result->condition ?? "", "Y", "0", "Default Tax Class", " ", "N", " ", " ", " ", " ", " ", " ", " ", " ", 
+            " ", " ", " ", " ", " ", "N", " ", " ", $result->itemId ?? ""
+        ]);
+    }
+
+    // Write the HTML rows to the file
+    fwrite($output_fp_html, $output_string);
+
+    // Close the file handles
+    fclose($output_fp_html);
+    fclose($fp_csv);
 }
-?>

@@ -11,7 +11,6 @@ $action = trim($_POST['action']);
 
 if ($action == 'get_ebay_details') {
     try {
-
         $output_file_name = 'output_string_temp.html';
         if (file_exists($output_file_name)) {
             unlink($output_file_name);
@@ -103,8 +102,8 @@ if ($action == 'get_ebay_details') {
 
         $limit = 200;
         $offset = 0;
-        $offset_limit = 5000;
-
+        $offset_limit = 1000;
+        $count = 0;
 
         if ($current_offset !== 0) {
             $offset = $current_offset;
@@ -112,7 +111,7 @@ if ($action == 'get_ebay_details') {
             if ($offset % $limit !== 0) {
                 $offset = floor($offset / $limit) * $limit;
             }
-            $offset_limit = $offset + 5000;
+            $offset_limit = $offset + 1000;
         }
 
         $next_url = null;
@@ -121,6 +120,7 @@ if ($action == 'get_ebay_details') {
         $response = browseApi_searchItmByCatId($cat_id, $limit, $offset, $filter, $access_token);
         $data = json_decode($response);
         $total_listings = $data->total;
+        $offset += $limit;
 
         $total_listings_remaining = intval($total_listings) - $offset;
 
@@ -165,113 +165,118 @@ if ($action == 'get_ebay_details') {
                 }
                 $next_url = $next_data->next ?? null;
             } else {
-                $next_response = browseApi_searchItmByCatId($cat_id, $limit, $offset, $filter, $access_token);
-                $next_data = json_decode($next_response);
+                if (count($all_item_summaries) >= $limit) {
+                    $next_response = browseApi_searchItmByCatId($cat_id, $limit, $offset, $filter, $access_token);
 
-                if (isset($next_data->itemSummaries)) {
-                    $all_item_summaries = array_merge($all_item_summaries, $next_data->itemSummaries);
+                    if (json_last_error() !== JSON_ERROR_NONE || !isset($data->itemSummaries)) {
+                        echo json_encode(["success" => false, "error" => "Error fetching data."]);
+                        break;
+                    }
+
+                    $next_data = json_decode($next_response);
+
+                    if (isset($next_data->itemSummaries)) {
+                        $all_item_summaries = array_merge($all_item_summaries, $next_data->itemSummaries);
+                    }
+
+                    $next_url = $next_data->next ?? null;
                 }
-
-                // echo json_decode($all_item_summaries);
-                // return;
-                $next_url = $next_data->next ?? null;
             }
 
-            $output_fp = fopen($output_file_name, 'a');
+            $offset += $limit;
 
             $output_string = '';
 
-            foreach ($next_data->itemSummaries as $result) {
-                $count++;
+            if (isset($all_item_summaries) && is_array($all_item_summaries)) {
+                $output_fp = fopen($output_file_name, 'a');
 
-                $itemId = $result->legacyItemId;
-                $itemId_onEbay = $result->itemId ?? "";
-                $title = $result->title;
+                foreach ($all_item_summaries as $result) {
+                    $count++;
 
-                // // Remove the excluded words from the title
-                foreach ($exclude_words_from_title as $word) {
-                    $title = trim(str_ireplace(trim($word), '', $title));
-                }
+                    $itemId = $result?->legacyItemId;
+                    $itemId_onEbay = $result?->itemId ?? "";
+                    $title = $result?->title;
 
-                $category_name = $cat_name;
-                if ($result->categories) {
-                    foreach ($result->categories as $category) {
-                        if ($category->categoryId == $cat_id) {
-                            $category_name = $category->categoryName;
+                    // // Remove the excluded words from the title
+                    foreach ($exclude_words_from_title as $word) {
+                        $title = trim(str_ireplace(trim($word), '', $title));
+                    }
+
+                    $category_name = $cat_name;
+                    if ($result?->categories) {
+                        foreach ($result?->categories as $category) {
+                            if ($category?->categoryId == $cat_id) {
+                                $category_name = $category?->categoryName;
+                            }
                         }
                     }
-                }
 
-                $thumb_image_1 = $result->image->imageUrl;
-
-                $large_image = '';
-                if (isset($result->thumbnailImages[0]->imageUrl)) {
-                    $large_image = $result->thumbnailImages[0]->imageUrl;
-                }
-
-                $price = $result->price->value;
-                $condition = $result->condition;
-                $shipping_cost = 0;
-                if (isset($result->shippingOptions[0]->shippingCost->value)) {
-                    $shippingCost = $result->shippingOptions[0]->shippingCost->value;
-                }
-
-                $itemWebUrl = $result->itemWebUrl;
-                $itemWebUrl = explode("&", $itemWebUrl);
-                $itemWebUrl = $itemWebUrl[0];
-
-                $img_2 = '';
-                if (isset($result->additionalImages[0]->imageUrl)) {
-                    $img_2 = $result->additionalImages[0]->imageUrl;
-                }
-                $img_3 = '';
-                if (isset($result->additionalImages[1]->imageUrl)) {
-                    $img_3 = $result->additionalImages[1]->imageUrl;
-                }
-                $img_4 = '';
-                if (isset($result->additionalImages[2]->imageUrl)) {
-                    $img_4 = $result->additionalImages[2]->imageUrl;
-                }
-                $img_5 = '';
-                if (isset($result->additionalImages[3]->imageUrl)) {
-                    $img_5 = $result->additionalImages[3]->imageUrl;
-                }
-                $img_6 = '';
-                if (isset($result->additionalImages[4]->imageUrl)) {
-                    $img_6 = $result->additionalImages[4]->imageUrl;
-                }
-
-                $seller = $result->seller->username;
-
-                //filter the Exclude words and if anything found in the title, skip that.
-                foreach ($exclude_words as $c) {
-                    if (strpos($title, $c) !== FALSE) {
-                        continue;
+                    $large_image = '';
+                    if (isset($result?->thumbnailImages[0]?->imageUrl)) {
+                        $large_image = $result?->thumbnailImages[0]?->imageUrl;
                     }
-                }
 
-                $output_string .= '<tr>
+                    $price = $result?->price?->value ?? "";
+                    $condition = $result?->condition;
+                    $shipping_cost = 0;
+                    if (isset($result?->shippingOptions[0]?->shippingCost?->value)) {
+                        $shippingCost = $result?->shippingOptions[0]?->shippingCost?->value;
+                    }
+
+                    $itemWebUrl = $result?->itemWebUrl;
+                    $itemWebUrl = explode("&", $itemWebUrl);
+                    $itemWebUrl = $itemWebUrl[0] ?? "";
+
+                    $img_2 = '';
+                    if (isset($result?->additionalImages[0]?->imageUrl)) {
+                        $img_2 = $result?->additionalImages[0]?->imageUrl;
+                    }
+                    $img_3 = '';
+                    if (isset($result?->additionalImages[1]?->imageUrl)) {
+                        $img_3 = $result?->additionalImages[1]?->imageUrl;
+                    }
+                    $img_4 = '';
+                    if (isset($result?->additionalImages[2]?->imageUrl)) {
+                        $img_4 = $result?->additionalImages[2]?->imageUrl;
+                    }
+                    $img_5 = '';
+                    if (isset($result?->additionalImages[3]?->imageUrl)) {
+                        $img_5 = $result?->additionalImages[3]?->imageUrl;
+                    }
+                    $img_6 = '';
+                    if (isset($result?->additionalImages[4]?->imageUrl)) {
+                        $img_6 = $result?->additionalImages[4]?->imageUrl;
+                    }
+
+                    $seller = $result?->seller?->username;
+
+                    foreach ($exclude_words as $c) {
+                        if (strpos($title, $c) !== FALSE) {
+                            continue;
+                        }
+                    }
+
+                    $output_string .= '<tr>
                     <td>' . $count . '</td>
                     <td>' . $title . '</td>
                     <td>' . $price . '</td>
                     <td>' . $seller . '</td>
                     <td>';
-                $output_string .= '<img src = ' . $large_image . ' width=60 />&nbsp;';
-                $output_string .= '</td>
+                    $output_string .= '<img src = ' . $large_image . ' width=60 />&nbsp;';
+                    $output_string .= '</td>
                  </tr>' . "\n";
 
-                fputcsv($fp, array("Product", $title, "P", " ", " ", " ", " ", "Right", $product_description, "0", $price, "0", "0", "0", "Y", "6 Month Replacement Warranty", "7", "0", "0", "0", "Y", "Y", "Usually Ships in 1-2 Business Days", "none", "0", "0", $category_name, $large_image, " ", $img_2, "Y", $img_3, " ", " ", " ", "unique_string", $itemId_onEbay, $condition_name, "Y", "0", "Default Tax Class", " ", "N", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", "N", " ", " ", $itemId_onEbay));
+                    fputcsv($fp, array("Product", $title, "P", " ", " ", " ", " ", "Right", $product_description, "0", $price, "0", "0", "0", "Y", "6 Month Replacement Warranty", "7", "0", "0", "0", "Y", "Y", "Usually Ships in 1-2 Business Days", "none", "0", "0", $category_name, $large_image, " ", $img_2, "Y", $img_3, " ", " ", " ", "unique_string", $itemId_onEbay, $condition_name, "Y", "0", "Default Tax Class", " ", "N", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", "N", " ", " ", $itemId_onEbay));
+                }
             }
 
             fwrite($output_fp, $output_string);
             fclose($output_fp);
-
-
-            if ($offset > $offset_limit) {
+            
+            if ($offset >= $offset_limit) {
                 break;
             }
 
-            $offset += $limit;
             $next_url = $next_data->next ?? null;
         } while (count($all_item_summaries) < $total_listings_remaining);
 
@@ -280,7 +285,11 @@ if ($action == 'get_ebay_details') {
         $output_string_footer = '</table>';
         file_put_contents($output_file_name, $output_string_footer, FILE_APPEND);
 
-        echo json_encode(["success" => true, "offset" => $offset]);
+        if (count($all_item_summaries) < $total_listings) {
+            echo json_encode(["success" => true, "offset" => $offset]);
+        } else {
+            echo json_encode(["success" => true]);
+        }
         return;
     } catch (Exception $error) {
         echo json_encode(["success" => false, "error" => $error->getMessage()]);

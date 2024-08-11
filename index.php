@@ -204,25 +204,25 @@
                         <div class="form-group">
                             <label>Exclude Products Contaning Words:</label>
                             <textarea name="exclude_words" id="exclude_words" class="form-control" rows="5"><?php
-                            $ex_words = file_get_contents('exclude_words.txt');
-                            $ex_words = str_replace(PHP_EOL, ' ', $ex_words);
-                            //PHP_EOL = PHP_End_Of_Line - would remove new lines too
-                            $ex_words = preg_replace('/[\r\n]+/', "\n", $ex_words);
-                            $ex_words = preg_replace('/[ \t]+/', ' ', $ex_words);
-                            echo $ex_words;
-                            ?></textarea>
+                                                                                                            $ex_words = file_get_contents('exclude_words.txt');
+                                                                                                            $ex_words = str_replace(PHP_EOL, ' ', $ex_words);
+                                                                                                            //PHP_EOL = PHP_End_Of_Line - would remove new lines too
+                                                                                                            $ex_words = preg_replace('/[\r\n]+/', "\n", $ex_words);
+                                                                                                            $ex_words = preg_replace('/[ \t]+/', ' ', $ex_words);
+                                                                                                            echo $ex_words;
+                                                                                                            ?></textarea>
                         </div>
                         <div class="form-group">
                             <label>Exclude Words from Product Title:</label>
                             <textarea class="form-control" name="exclude_words_from_title" id="exclude_words_from_title"
                                 rows="2"><?php
-                                $ex_words = file_get_contents('exclude_words_from_title.txt');
-                                $ex_words = str_replace(PHP_EOL, ' ', $ex_words);
-                                //PHP_EOL = PHP_End_Of_Line - would remove new lines too
-                                $ex_words = preg_replace('/[\r\n]+/', "\n", $ex_words);
-                                $ex_words = preg_replace('/[ \t]+/', ' ', $ex_words);
-                                echo $ex_words;
-                                ?></textarea>
+                                            $ex_words = file_get_contents('exclude_words_from_title.txt');
+                                            $ex_words = str_replace(PHP_EOL, ' ', $ex_words);
+                                            //PHP_EOL = PHP_End_Of_Line - would remove new lines too
+                                            $ex_words = preg_replace('/[\r\n]+/', "\n", $ex_words);
+                                            $ex_words = preg_replace('/[ \t]+/', ' ', $ex_words);
+                                            echo $ex_words;
+                                            ?></textarea>
                         </div>
                         <div class="form-group mt-3">
                             <button type="button" class="btn btn-primary form-control" id="btn_search">Submit</button>
@@ -235,6 +235,8 @@
                     <!-- <img src="images/spinner.gif" width="50" height="50" /> <br> -->
                     <i>Processing...</i>
                 </div>
+                <div id="error_div" style="display: none; color:red; font-size: large; font-weight:500;">
+                </div>
 
                 <div id="output_string_results" align="center"> </div>
                 <div id="op_results" align="center"> </div>
@@ -245,7 +247,7 @@
 
     <script>
         window.checkOutputString = false;
-        $(document).ready(function (e) {
+        $(document).ready(function(e) {
             localStorage.removeItem("currentOffset");
 
             function doCheckOutputString() {
@@ -253,31 +255,34 @@
                     return;
                 }
                 $.get('output_string.php',
-                    function (data) {
+                    function(data) {
                         $("#output_string_results").html(data);
                     }
                 );
                 setTimeout(doCheckOutputString, 300);
             }
+
             function startCheckingOutputString() {
                 checkOutputString = true;
                 doCheckOutputString();
             }
+
             function stopCheckingOutputString() {
                 checkOutputString = false;
             }
+
             function auto_downloadCSV(fileName) {
                 window.location.href = 'download_csv.php?fname=' + fileName;
             };
 
             // Change button text back to 'Submit' when any input changes
-            $('input, textarea, select').on('input change', function () {
+            $('input, textarea, select').on('input change', function() {
                 $("#btn_search").text("Submit");
                 localStorage.removeItem("currentOffset");
             });
 
             //Get the Category Info Listings
-            $("#btn_search").click(function (e) {
+            $("#btn_search").click(function(e) {
 
                 var cat_id = $('#categoryID').val();
                 if (cat_id == '') {
@@ -322,7 +327,7 @@
                 startCheckingOutputString();
 
                 $.post('ajax_functions.php', query_string,
-                    function (data) {
+                    function(data) {
                         const parsedData = JSON.parse(data);
 
                         $("#loading").css('display', 'none');
@@ -334,17 +339,24 @@
                                 $("#btn_search").text("Fetch More");
                             }
 
-                            stopCheckingOutputString();
+                            setTimeout(function(){
+                                stopCheckingOutputString();
+                            }, 1000);
+
 
                             $("#loading").css('display', 'none');
 
                             //download CSV automatically here
-                            setTimeout(function () {
+                            setTimeout(function() {
                                 auto_downloadCSV(csv_file);
                             }, 100);
                         } else {
                             console.log(parsedData?.error);
+                            stopCheckingOutputString();
+
                             $("#loading").css('display', 'none');
+                            $("#error_div").css('display', 'block');
+                            $('#error_div').text(parsedData?.error);
                         }
                     }
                 );
