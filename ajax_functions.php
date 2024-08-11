@@ -183,7 +183,7 @@ if ($action == 'get_ebay_details') {
                 }
             }
 
-            $offset += $limit;
+            $offset = $offset + $limit;
 
             $output_string = '';
 
