@@ -304,7 +304,7 @@
                 var start_price = $('#start_price').val();
                 var end_price = $('#end_price').val();
                 var spec_seller = $('#spec_seller').val();
-                //var wordFilter = $('#wordFilter').val();
+                //var wordFilter = $('#wordFilter').val();            
                 var exclude_words = $('#exclude_words').val();
                 //var maintain = $('#maintain').val();
 
@@ -333,6 +333,14 @@
                         // $("#op_results").html(data);
 
                         if (parsedData?.success) {
+                            if (parsedData?.offset) {
+                                localStorage.setItem("currentOffset", parsedData?.offset);
+                                $("#btn_search").text("Fetch More");
+                            } else {
+                                localStorage.removeItem("currentOffset");
+                                $("#btn_search").text("Submit");
+                            }
+
                             setTimeout(function () {
                                 stopCheckingOutputString();
                             }, 1000);
@@ -348,9 +356,13 @@
                             console.log(parsedData?.error);
                             stopCheckingOutputString();
 
+                            $("#btn_search").text("Submit");
+                            localStorage.removeItem("currentOffset");
+
                             $("#loading").css('display', 'none');
                             $("#error_div").css('display', 'block');
                             $('#error_div').text(parsedData?.error);
+
                         }
                     }
                 );

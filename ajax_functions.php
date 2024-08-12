@@ -3,9 +3,9 @@ set_time_limit(0);
 error_reporting(E_ALL);
 ini_set("memory_limit", "-1");
 //include('includes/config.php');
-include ('includes/functions.php');
-include ('includes/ebayKeys.php');
-include ('includes/ebayApi.class.php');
+include('includes/functions.php');
+include('includes/ebayKeys.php');
+include('includes/ebayApi.class.php');
 
 $action = trim($_POST['action']);
 
@@ -31,6 +31,8 @@ if ($action == 'get_ebay_details') {
 
         $cat_id = trim($_POST['cat_id']);
         $cat_name = trim($_POST['categoryName']);
+
+        $current_offset = intval(trim($_POST['currentOffset']));
 
         $excludedSellers = trim($_POST['excludedSellers']);
         $excludedSellers = rtrim($excludedSellers, ",");
@@ -100,14 +102,43 @@ if ($action == 'get_ebay_details') {
 
         $limit = 200;
         $offset = 0;
-        $offset_limit = 1000;
+        $offset_limit = 3000;
         $count = 0;
+
+        if ($current_offset !== 0) {
+            $offset = $current_offset;
+
+            if ($offset % $limit !== 0) {
+                $offset = floor($offset / $limit) * $limit;
+            }
+            $offset_limit = $offset + 3000;
+        }
 
         $next_url = null;
         $all_item_summaries = [];
 
         $response = browseApi_searchItmByCatId($cat_id, $limit, $offset, $filter, $access_token);
         $data = json_decode($response);
+
+        if (isset($data->errors)) {
+            foreach ($data->errors as $error) {
+                if ($error->errorId == 12029) {
+                    // Handle the 10,000 listings limit error
+                    echo json_encode([
+                        "success" => false,
+                        "error" => "The maximum number of record listing is reached. Cannot fetch more results."
+                    ]);
+                    return;
+                } else {
+                    echo json_encode([
+                        "success" => false,
+                        "error" => "Failed to fetch data from ebay."
+                    ]);
+                    return;
+                }
+            }
+        }
+
         $total_listings = $data->total;
         $offset += $limit;
 
@@ -145,30 +176,31 @@ if ($action == 'get_ebay_details') {
         $next_url = $data->next ?? null;
 
         do {
+            $data_summeries_to_write = [];
+
             if ($next_url) {
                 $next_response = browseApi_searchItmByCatId_next($next_url, $access_token);
                 $next_data = json_decode($next_response);
 
                 if (isset($next_data->itemSummaries)) {
                     $all_item_summaries = array_merge($all_item_summaries, $next_data->itemSummaries);
+                    $data_summeries_to_write = $next_data->itemSummaries;
                 }
                 $next_url = $next_data->next ?? null;
             } else {
                 if (count($all_item_summaries) >= $limit) {
                     $next_response = browseApi_searchItmByCatId($cat_id, $limit, $offset, $filter, $access_token);
 
-                    if (json_last_error() !== JSON_ERROR_NONE || !isset($data->itemSummaries)) {
-                        echo json_encode(["success" => false, "error" => "Error fetching data."]);
-                        break;
-                    }
-
                     $next_data = json_decode($next_response);
 
                     if (isset($next_data->itemSummaries)) {
                         $all_item_summaries = array_merge($all_item_summaries, $next_data->itemSummaries);
+                        $data_summeries_to_write = $next_data->itemSummaries;
                     }
 
                     $next_url = $next_data->next ?? null;
+                } else {
+                    $data_summeries_to_write = $all_item_summaries;
                 }
             }
 
@@ -176,10 +208,10 @@ if ($action == 'get_ebay_details') {
 
             $output_string = '';
 
-            if (isset($all_item_summaries) && is_array($all_item_summaries)) {
+            if (isset($data_summeries_to_write) && is_array($data_summeries_to_write)) {
                 $output_fp = fopen($output_file_name, 'a');
 
-                foreach ($all_item_summaries as $result) {
+                foreach ($data_summeries_to_write as $result) {
                     $count++;
 
                     $itemId = $result?->legacyItemId;
@@ -262,16 +294,24 @@ if ($action == 'get_ebay_details') {
             fwrite($output_fp, $output_string);
             fclose($output_fp);
 
-            $next_url = $next_data->next ?? null;
+            if ($offset > $offset_limit) {
+                break;
+            }
 
-        } while (count($all_item_summaries) < $total_listings);
+            $next_url = $next_data->next ?? null;
+        } while ($offset <= $total_listings);
 
         fclose($fp);
 
         $output_string_footer = '</table>';
         file_put_contents($output_file_name, $output_string_footer, FILE_APPEND);
 
-        echo json_encode(["success" => true]);
+        if ($offset <= $total_listings) {
+            echo json_encode(["success" => true, "offset" => $offset]);
+        } else {
+
+            echo json_encode(["success" => true]);
+        }
         return;
     } catch (Exception $error) {
         echo json_encode(["success" => false, "error" => $error->getMessage()]);
