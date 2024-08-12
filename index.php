@@ -179,14 +179,13 @@
                         <div class="form-group">
                             <label>Country:</label>
                             <select class="country form-control" name="loc" id="loc">
-                                <?php
-                                $countries_line = file_get_contents('include_countries.txt');
-                                $country_names = explode(',', $countries_line);
-                                $country_names = array_map('trim', $country_names);
-                                foreach ($country_names as $name) {
-                                    echo "<option value=\"$name\">$name</option>\n";
-                                }
-                                ?>
+                                <option value="US">USA</option>
+                                <option value="DE">UK</option>
+                                <option value="CA">Canada</option>
+                                <option value="CN">China</option>
+                                <option value="AE">UAE</option>
+                                <option value="DE">Germany</option>
+                                <option value="PL">Poland</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -204,25 +203,25 @@
                         <div class="form-group">
                             <label>Exclude Products Contaning Words:</label>
                             <textarea name="exclude_words" id="exclude_words" class="form-control" rows="5"><?php
-                                                                                                            $ex_words = file_get_contents('exclude_words.txt');
-                                                                                                            $ex_words = str_replace(PHP_EOL, ' ', $ex_words);
-                                                                                                            //PHP_EOL = PHP_End_Of_Line - would remove new lines too
-                                                                                                            $ex_words = preg_replace('/[\r\n]+/', "\n", $ex_words);
-                                                                                                            $ex_words = preg_replace('/[ \t]+/', ' ', $ex_words);
-                                                                                                            echo $ex_words;
-                                                                                                            ?></textarea>
+                            $ex_words = file_get_contents('exclude_words.txt');
+                            $ex_words = str_replace(PHP_EOL, ' ', $ex_words);
+                            //PHP_EOL = PHP_End_Of_Line - would remove new lines too
+                            $ex_words = preg_replace('/[\r\n]+/', "\n", $ex_words);
+                            $ex_words = preg_replace('/[ \t]+/', ' ', $ex_words);
+                            echo $ex_words;
+                            ?></textarea>
                         </div>
                         <div class="form-group">
                             <label>Exclude Words from Product Title:</label>
                             <textarea class="form-control" name="exclude_words_from_title" id="exclude_words_from_title"
                                 rows="2"><?php
-                                            $ex_words = file_get_contents('exclude_words_from_title.txt');
-                                            $ex_words = str_replace(PHP_EOL, ' ', $ex_words);
-                                            //PHP_EOL = PHP_End_Of_Line - would remove new lines too
-                                            $ex_words = preg_replace('/[\r\n]+/', "\n", $ex_words);
-                                            $ex_words = preg_replace('/[ \t]+/', ' ', $ex_words);
-                                            echo $ex_words;
-                                            ?></textarea>
+                                $ex_words = file_get_contents('exclude_words_from_title.txt');
+                                $ex_words = str_replace(PHP_EOL, ' ', $ex_words);
+                                //PHP_EOL = PHP_End_Of_Line - would remove new lines too
+                                $ex_words = preg_replace('/[\r\n]+/', "\n", $ex_words);
+                                $ex_words = preg_replace('/[ \t]+/', ' ', $ex_words);
+                                echo $ex_words;
+                                ?></textarea>
                         </div>
                         <div class="form-group mt-3">
                             <button type="button" class="btn btn-primary form-control" id="btn_search">Submit</button>
@@ -247,7 +246,7 @@
 
     <script>
         window.checkOutputString = false;
-        $(document).ready(function(e) {
+        $(document).ready(function (e) {
             localStorage.removeItem("currentOffset");
 
             function doCheckOutputString() {
@@ -255,7 +254,7 @@
                     return;
                 }
                 $.get('output_string.php',
-                    function(data) {
+                    function (data) {
                         $("#output_string_results").html(data);
                     }
                 );
@@ -276,13 +275,13 @@
             };
 
             // Change button text back to 'Submit' when any input changes
-            $('input, textarea, select').on('input change', function() {
+            $('input, textarea, select').on('input change', function () {
                 $("#btn_search").text("Submit");
                 localStorage.removeItem("currentOffset");
             });
 
             //Get the Category Info Listings
-            $("#btn_search").click(function(e) {
+            $("#btn_search").click(function (e) {
 
                 var cat_id = $('#categoryID').val();
                 if (cat_id == '') {
@@ -305,7 +304,7 @@
                 var start_price = $('#start_price').val();
                 var end_price = $('#end_price').val();
                 var spec_seller = $('#spec_seller').val();
-                //var wordFilter = $('#wordFilter').val();            
+                //var wordFilter = $('#wordFilter').val();
                 var exclude_words = $('#exclude_words').val();
                 //var maintain = $('#maintain').val();
 
@@ -327,19 +326,14 @@
                 startCheckingOutputString();
 
                 $.post('ajax_functions.php', query_string,
-                    function(data) {
+                    function (data) {
                         const parsedData = JSON.parse(data);
 
                         $("#loading").css('display', 'none');
                         // $("#op_results").html(data);
 
                         if (parsedData?.success) {
-                            if (parsedData?.offset) {
-                                localStorage.setItem("currentOffset", parsedData?.offset);
-                                $("#btn_search").text("Fetch More");
-                            }
-
-                            setTimeout(function(){
+                            setTimeout(function () {
                                 stopCheckingOutputString();
                             }, 1000);
 
@@ -347,7 +341,7 @@
                             $("#loading").css('display', 'none');
 
                             //download CSV automatically here
-                            setTimeout(function() {
+                            setTimeout(function () {
                                 auto_downloadCSV(csv_file);
                             }, 100);
                         } else {

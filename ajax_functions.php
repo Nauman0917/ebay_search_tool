@@ -3,9 +3,9 @@ set_time_limit(0);
 error_reporting(E_ALL);
 ini_set("memory_limit", "-1");
 //include('includes/config.php');
-include('includes/functions.php');
-include('includes/ebayKeys.php');
-include('includes/ebayApi.class.php');
+include ('includes/functions.php');
+include ('includes/ebayKeys.php');
+include ('includes/ebayApi.class.php');
 
 $action = trim($_POST['action']);
 
@@ -31,8 +31,6 @@ if ($action == 'get_ebay_details') {
 
         $cat_id = trim($_POST['cat_id']);
         $cat_name = trim($_POST['categoryName']);
-
-        $current_offset = intval(trim($_POST['currentOffset']));
 
         $excludedSellers = trim($_POST['excludedSellers']);
         $excludedSellers = rtrim($excludedSellers, ",");
@@ -104,15 +102,6 @@ if ($action == 'get_ebay_details') {
         $offset = 0;
         $offset_limit = 1000;
         $count = 0;
-
-        if ($current_offset !== 0) {
-            $offset = $current_offset;
-
-            if ($offset % $limit !== 0) {
-                $offset = floor($offset / $limit) * $limit;
-            }
-            $offset_limit = $offset + 1000;
-        }
 
         $next_url = null;
         $all_item_summaries = [];
@@ -272,24 +261,17 @@ if ($action == 'get_ebay_details') {
 
             fwrite($output_fp, $output_string);
             fclose($output_fp);
-            
-            if ($offset >= $offset_limit) {
-                break;
-            }
 
             $next_url = $next_data->next ?? null;
-        } while (count($all_item_summaries) < $total_listings_remaining);
+
+        } while (count($all_item_summaries) < $total_listings);
 
         fclose($fp);
 
         $output_string_footer = '</table>';
         file_put_contents($output_file_name, $output_string_footer, FILE_APPEND);
 
-        if (count($all_item_summaries) < $total_listings) {
-            echo json_encode(["success" => true, "offset" => $offset]);
-        } else {
-            echo json_encode(["success" => true]);
-        }
+        echo json_encode(["success" => true]);
         return;
     } catch (Exception $error) {
         echo json_encode(["success" => false, "error" => $error->getMessage()]);
